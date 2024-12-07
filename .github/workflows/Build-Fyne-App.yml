@@ -7,65 +7,43 @@ on:
   pull_request:
     branches:
       - main
-
+      
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macOS-latest, windows-latest]
-
+    runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-      - name: Set up Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.23' # 或者你需要的 Go 版本
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: '1.20'  # 设置Go版本，确保和你的项目兼容
 
-      - name: Install dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev xorg-dev libgtk-3-dev libappindicator3-dev
+    - name: Install Fyne CLI
+      run: |
+        curl -s https://fyne.io/downloads/ | bash
+        export PATH=$PATH:$HOME/go/bin
 
-      - name: Install dependencies (macOS)
-        if: matrix.os == 'macOS-latest'
-        run: |
-          brew update
-          brew install go
-          brew install pkg-config
+    - name: Get version from tag
+      id: version
+      run: echo "VERSION=$(echo ${GITHUB_REF#refs/tags/})" >> $GITHUB_ENV
 
-      - name: Install Fyne
-        run: go get fyne.io/fyne/v2/...
+    - name: Build the Fyne app
+      run: |
+        mkdir -p dist
+        fyne package -os linux -icon ./assets/icon.png -name "Mi Router BE5000 (RD18) Get SSH Tool ${VERSION}" -output dist/
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts
+        path: dist/
 
-      - name: Build app
-        run: go build -o myapp
-
-      - name: Package app (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          fyne package -os linux -icon myicon.png
-          mv myapp-linux.tar.xz myapp-linux-${{ github.sha }}.tar.xz
-
-      - name: Package app (macOS)
-        if: matrix.os == 'macOS-latest'
-        run: |
-          fyne package -os darwin -icon myicon.png -name "MyApp" -appID com.example.myapp
-          mv MyApp.app.zip myapp-darwin-${{ github.sha }}.zip
-
-      - name: Package app (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          fyne package -os windows -icon myicon.ico
-          Compress-Archive -Path myapp.exe -DestinationPath myapp-windows-${{ github.sha }}.zip
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ matrix.os }}-build
-          path: |
-            myapp-linux-*.tar.xz
-            myapp-darwin-*.zip
-            myapp-windows-*.zip
+    - name: Create GitHub release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
