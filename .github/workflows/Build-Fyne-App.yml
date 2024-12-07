@@ -1,13 +1,10 @@
-name: Build Fyne App
+name: Cross-compile Fyne App with fyne-cross
 
 on:
   push:
     branches:
-      - main
-  pull_request:
-    branches:
-      - main
-      
+      - main  # 可以根据需要修改触发条件
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,30 +12,35 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
-
+    
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: '1.20'  # 设置Go版本，确保和你的项目兼容
+        go-version: '1.20'  # 设置 Go 版本，确保和你的项目兼容
 
-    - name: Install Fyne CLI
+    - name: Install dependencies
       run: |
-        curl -s https://fyne.io/downloads/ | bash
-        export PATH=$PATH:$HOME/go/bin
+        # 安装 fyne-cross 和其他必要的依赖
+        sudo apt-get update
+        sudo apt-get install -y libx11-dev libxext-dev libxrender-dev libxtst-dev libxrandr-dev libxi-dev libgl-dev libudev-dev
 
-    - name: Get version from tag
-      id: version
-      run: echo "VERSION=$(echo ${GITHUB_REF#refs/tags/})" >> $GITHUB_ENV
+        # 安装 fyne-cross 工具
+        go install github.com/fyne-io/fyne-cross/v2/cmd/fyne-cross@latest
 
-    - name: Build the Fyne app
+    - name: Cross-compile Fyne application
       run: |
+        # 创建输出目录
         mkdir -p dist
-        fyne package -os linux -icon ./assets/icon.png -name "Mi Router BE5000 (RD18) Get SSH Tool ${VERSION}" -output dist/
-      
+
+        # 使用 fyne-cross 进行交叉编译，生成目标平台的二进制文件
+        fyne-cross -os linux -arch amd64 -output dist/
+        fyne-cross -os windows -arch amd64 -output dist/
+        fyne-cross -os darwin -arch amd64 -output dist/
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: build-artifacts
+        name: fyne-cross-builds
         path: dist/
 
     - name: Create GitHub release
