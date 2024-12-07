@@ -1,51 +1,61 @@
-name: Cross-compile Fyne App with fyne-cross
+name: Build and Cross-Compile Fyne App with fyne-cross
 
 on:
   push:
     branches:
-      - main  # 可以根据需要修改触发条件
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    
+    runs-on: ubuntu-latest # 使用 Ubuntu 作为构建环境
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
-    
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: '1.20'  # 设置 Go 版本，确保和你的项目兼容
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Install dependencies
-      run: |
-        # 安装 fyne-cross 和其他必要的依赖
-        sudo apt-get update
-        sudo apt-get install -y libx11-dev libxext-dev libxrender-dev libxtst-dev libxrandr-dev libxi-dev libgl-dev libudev-dev
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.18' # 或者你需要的 Go 版本
 
-        # 安装 fyne-cross 工具
-        go install github.com/fyne-io/fyne-cross/v2/cmd/fyne-cross@latest
+      - name: Install Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io
 
-    - name: Cross-compile Fyne application
-      run: |
-        # 创建输出目录
-        mkdir -p dist
+      - name: Pull fyne-cross Docker image
+        run: docker pull fyneio/fyne-cross
 
-        # 使用 fyne-cross 进行交叉编译，生成目标平台的二进制文件
-        fyne-cross -os linux -arch amd64 -output dist/
-        fyne-cross -os windows -arch amd64 -output dist/
-        fyne-cross -os darwin -arch amd64 -output dist/
+      - name: Cross-compile with fyne-cross
+        run: |
+          docker run --rm -v $(pwd):/app fyneio/fyne-cross -icon=myicon.png -app-id=com.example.myapp linux -arch=amd64
+          docker run --rm -v $(pwd):/app fyneio/fyne-cross -icon=myicon.png -app-id=com.example.myapp linux -arch=arm64
+          docker run --rm -v $(pwd):/app fyneio/fyne-cross -icon=myicon.png -app-id=com.example.myapp darwin -arch=amd64
+          docker run --rm -v $(pwd):/app fyneio/fyne-cross -icon=myicon.png -app-id=com.example.myapp darwin -arch=arm64
+          docker run --rm -v $(pwd):/app fyneio/fyne-cross -icon=myicon.ico -app-id=com.example.myapp windows -arch=amd64
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: fyne-cross-builds
-        path: dist/
+      - name: Rename output files
+        run: |
+          mv myapp-linux-amd64 myapp-linux-amd64-${{ github.sha }}
+          mv myapp-linux-arm64 myapp-linux-arm64-${{ github.sha }}
+          mv myapp-darwin-amd64 myapp-darwin-amd64-${{ github.sha }}
+          mv myapp-darwin-arm64 myapp-darwin-arm64-${{ github.sha }}
+          mv myapp-windows-amd64.exe myapp-windows-amd64-${{ github.sha }}.exe
 
-    - name: Create GitHub release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: dist/*
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: |
+            myapp-linux-amd64-${{ github.sha }}
+            myapp-linux-arm64-${{ github.sha }}
+            myapp-darwin-amd64-${{ github.sha }}
+            myapp-darwin-arm64-${{ github.sha }}
+            myapp-windows-amd64-${{ github.sha }}.exe
