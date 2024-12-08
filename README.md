@@ -22,7 +22,8 @@ A tool designed to exploit vulnerabilities in Mi Router BE5000 with 1.0.53 firmw
 - 初始漏洞利用和文件传输
 - SSH 服务部署
 - SSH 持久化机制(待补)
-
+## Download / 下载
+[releases](https://github.com/iamsxm/BE5000_SSh_UI/releases)
 ## Usage / 使用方法
 
 1. 运行程序
