@@ -1,9 +1,8 @@
 name: build-go-binary
 
 on:
-  push:
-    branches:
-      - main
+  release:
+    types: [created]
 #on:
 #  release:
 #    types: [created] # 表示在创建新的 Release 时触发
@@ -47,7 +46,7 @@ jobs:
           mv dropbear ./build/bin
           mv dropbearkey ./build/bin
           zip -r ./build/BE5000_SSh_${{ matrix.goos }}_${{ matrix.goarch }}.zip ./build/release
-          
+
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "./build/release"
