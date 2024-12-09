@@ -222,6 +222,8 @@ func createPayload(localIP string) {
 
 	content := strings.ReplaceAll(string(template), "{{LOCAL_IP}}", localIP)
 	content = strings.ReplaceAll(content, "{{PORT}}", port)
+	//替换Windows回车为Unix格式
+	content = strings.ReplaceAll(content, "\r\n", "\n")
 
 	if err := ioutil.WriteFile("ping1", []byte(content), 0644); err != nil {
 		log.Printf("写入playload文件失败: %v", err)
