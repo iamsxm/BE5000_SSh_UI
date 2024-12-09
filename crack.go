@@ -214,7 +214,7 @@ func runServer(localIP, routerIP string) {
  * 根据模板创建payload文件
  */
 func createPayload(localIP string) {
-	template, err := ioutil.ReadFile("ping1.template")
+	template, err := os.ReadFile("ping1.template")
 	if err != nil {
 		log.Printf("读取模板文件失败: %v", err)
 		return
@@ -225,7 +225,7 @@ func createPayload(localIP string) {
 	//替换Windows回车为Unix格式
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 
-	if err := ioutil.WriteFile("ping1", []byte(content), 0644); err != nil {
+	if err := os.WriteFile("ping1", []byte(content), 0644); err != nil {
 		log.Printf("写入playload文件失败: %v", err)
 	}
 }
