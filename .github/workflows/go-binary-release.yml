@@ -27,6 +27,7 @@ jobs:
 
       - name: install dependencies
         run: |
+          sudo apt-get install gcc-mingw-w64
           sudo apt install xorg-dev
           go install fyne.io/fyne/v2/cmd/fyne@latest
 
@@ -36,4 +37,5 @@ jobs:
 
       - name: build-release
         run: |
+          export CC=x86_64-w64-mingw32-gcc
           fyne package -os  ${{ matrix.goos }} -icon icon.png
