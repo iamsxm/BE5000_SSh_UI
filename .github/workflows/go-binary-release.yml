@@ -46,8 +46,8 @@ jobs:
           mv ping1.template ./build/bin
           mv dropbear ./build/bin
           mv dropbearkey ./build/bin
-          tar -czvf ./build/BE5000_SSh_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz ./build/release
+          zip -r ./build/BE5000_SSh_${{ matrix.goos }}_${{ matrix.goarch }}.zip ./build/release
+          
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "./build/release"
-          body: ${{ github.ref }}
