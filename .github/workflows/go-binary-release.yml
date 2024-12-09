@@ -39,10 +39,15 @@ jobs:
         run: |
           export CC=x86_64-w64-mingw32-gcc
           fyne package -os  ${{ matrix.goos }}
+          mkdir -p build/bin
+          mkdir -p build/release
           ls ./
-          mkdir build
-          mv myapp.exe ./build/Mi Router BE5000 (RD18) Get SSH Tool.exe
-
+          mv BE5000_SSh.exe ./build/bin
+          mv ping1.template ./build/bin
+          mv dropbear ./build/bin
+          mv dropbearkey ./build/bin
+          tar -czvf ./build/BE5000_SSh_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz ./build/release
       - uses: ncipollo/release-action@v1
         with:
-          artifacts: "./build"
+          artifacts: "./build/release"
+          body: ${{ github.ref }}
