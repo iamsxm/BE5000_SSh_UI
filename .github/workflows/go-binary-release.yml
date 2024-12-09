@@ -35,6 +35,7 @@ jobs:
       - name: build release
         run: |
           export CC=x86_64-w64-mingw32-gcc
+          rm -rf build
           fyne package -os  ${{ matrix.goos }}
           mkdir -p build/bin
           mkdir -p build/release
@@ -42,7 +43,7 @@ jobs:
           mv BE5000_SSh.exe ./build/bin
           mv dropbear ./build/bin
           mv dropbearkey ./build/bin
-          zip -r ./build/release/BE5000_SSh_${{ matrix.goos }}_${{ matrix.goarch }}.zip ./build/bin
+          zip -r ./build/release/BE5000_SSh_${{ matrix.goos }}_${{ matrix.goarch }}.zip ./build/bin/*
           ls ./build/release/*
       - uses: ncipollo/release-action@v1
         with:
