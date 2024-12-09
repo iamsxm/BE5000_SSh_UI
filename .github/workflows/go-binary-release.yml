@@ -38,7 +38,7 @@ jobs:
       - name: build release
         run: |
           export CC=x86_64-w64-mingw32-gcc
-          fyne package -os  ${{ matrix.goos }} -icon icon.png
+          fyne package -os  ${{ matrix.goos }}
           ls ./
           mkdir build
           mv myapp.exe ./build/Mi Router BE5000 (RD18) Get SSH Tool.exe
