@@ -1,11 +1,9 @@
 name: build-go-binary
 
+
 on:
   release:
-    types: [created]
-#on:
-#  release:
-#    types: [created] # 表示在创建新的 Release 时触发
+    types: [created] # 表示在创建新的 Release 时触发
 permissions:
   contents: write
   packages: write
@@ -45,8 +43,8 @@ jobs:
           mv ping1.template ./build/bin
           mv dropbear ./build/bin
           mv dropbearkey ./build/bin
-          zip -r ./build/BE5000_SSh_${{ matrix.goos }}_${{ matrix.goarch }}.zip ./build/release
-
+          zip -r ./build/release/BE5000_SSh_${{ matrix.goos }}_${{ matrix.goarch }}.zip ./build/bin
+          ls ./build/release/*
       - uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
