@@ -25,7 +25,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }} # 一个默认的变量，用来实现往 Release 中添加文件
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
-          build_flags: "CGO_ENABLED=1 CGO_LDFLAGS=-static-libgcc"
+          pre_command: "export CGO_ENABLED=1 CGO_LDFLAGS=-static-libgcc"
           #goversion: 1.23 # 可以指定编译使用的 Golang 版本
           binary_name: "Mi Router BE5000 (RD18) Get SSH Tool" # 可以指定二进制文件的名称
           #extra_files: README.md # 需要包含的额外文件
