@@ -20,17 +20,19 @@ jobs:
         goarch: [ amd64, arm64 ] # 需要打包的架构
     steps:
       - uses: actions/checkout@v4
-      - name: install gcc
-        run: |
-          sudo apt install build-essential
-          sudo apt install clang
-          clang --version
-      - uses: wangyoucao577/go-release-action@v1
+      - name: Set up Go
+        uses: actions/setup-go@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }} # 一个默认的变量，用来实现往 Release 中添加文件
-          goos: ${{ matrix.goos }}
-          goarch: ${{ matrix.goarch }}
-          pre_command: "export CGO_ENABLED=1"
-          #goversion: 1.23 # 可以指定编译使用的 Golang 版本
-          binary_name: "Mi Router BE5000 (RD18) Get SSH Tool" # 可以指定二进制文件的名称
-          #extra_files: README.md # 需要包含的额外文件
+          go-version: '1.23'
+
+      - name: install fyne
+        run: |
+          go install fyne.io/fyne/v2/cmd/fyne@latest
+
+      - name: download icon
+        run: |
+          curl -L https://raw.githubusercontent.com/iamsxm/BE5000_SSh_UI/master/xiaomi_icon.png > icon.png
+
+      - name: build-release
+        run: |
+          fyne package -os  ${{ matrix.goos }} -icon icon.png
