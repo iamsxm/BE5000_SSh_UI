@@ -20,6 +20,10 @@ jobs:
         goarch: [ amd64, arm64 ] # 需要打包的架构
     steps:
       - uses: actions/checkout@v4
+      - name: install gcc
+        run: |
+          sudo apt update && sudo apt upgrade
+          sudo apt install clang
       - uses: wangyoucao577/go-release-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }} # 一个默认的变量，用来实现往 Release 中添加文件
