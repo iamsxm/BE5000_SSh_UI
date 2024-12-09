@@ -33,9 +33,16 @@ jobs:
 
       - name: download icon
         run: |
-          curl -L https://raw.githubusercontent.com/iamsxm/BE5000_SSh_UI/master/xiaomi_icon.png > icon.png
+          curl -L https://raw.githubusercontent.com/iamsxm/BE5000_SSh_UI/master/xiaomi_icon.png > Icon.png
 
-      - name: build-release
+      - name: build release
         run: |
           export CC=x86_64-w64-mingw32-gcc
           fyne package -os  ${{ matrix.goos }} -icon icon.png
+          ls ./
+          mkdir build
+          mv myapp.exe ./build/Mi Router BE5000 (RD18) Get SSH Tool.exe
+
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "./build"
