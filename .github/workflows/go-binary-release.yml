@@ -40,7 +40,6 @@ jobs:
           mkdir -p build/release
           ls ./
           mv BE5000_SSh.exe ./build/bin
-          mv ping1.template ./build/bin
           mv dropbear ./build/bin
           mv dropbearkey ./build/bin
           zip -r ./build/release/BE5000_SSh_${{ matrix.goos }}_${{ matrix.goarch }}.zip ./build/bin
