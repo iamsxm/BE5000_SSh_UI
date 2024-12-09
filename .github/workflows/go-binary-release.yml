@@ -50,4 +50,4 @@ jobs:
       - uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: "./build/release"
+          artifacts: "./build/release/*"
