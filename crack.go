@@ -223,13 +223,8 @@ func (h *customHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(decodedStr, trigger) {
 		log.Printf(sshInfo, h.routerIP)
 		w.WriteHeader(http.StatusOK)
-		go func() {
-			time.Sleep(1 * time.Second)
-			os.Exit(0)
-		}()
 		return
 	}
-
 	w.WriteHeader(http.StatusOK)
 }
 
