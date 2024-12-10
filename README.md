@@ -21,19 +21,19 @@ A tool designed to exploit vulnerabilities in Mi Router BE5000 with 1.0.53 firmw
 这是一个针对小米路由器 BE5000 1.0.53 固件的漏洞利用工具，通过命令注入实现 SSH 访问。工具包含三个主要组件：
 - 初始漏洞利用和文件传输
 - SSH 服务部署
-- SSH 持久化机制(待补)
+- SSH 持久化机制(参考下方)
 ## Download / 下载
 [Releases](https://github.com/iamsxm/BE5000_SSh_UI/releases)
 ## Usage / 使用方法
 
-1. 运行程序
+1. 解压缩/build/bin下面所有文件，运行程序BE5000_SSh.exe
 2. 配置以下参数：
-   - 本地机器的 IP 地址
+   - 本地机器的 IP 地址(默认绑定8888端口，请确认未被占用)
    - 目标路由器的 IP 地址
    - 路由器的认证令牌（可以在路由器登陆之后的 Web 界面中找到，32 位字符串，`stok=` 之后的部分）
 3. 点击破解按钮
 4. 当提示SSH 已开启,可以通过 23323 端口使用 root 账户和从 https://mi.tellme.top/ 计算出的密码通过 SSH 访问路由器。
-
+5. 持久化SSH([教程](https://dwd.moe/p/mi-router-be5000.html#%E7%BB%B4%E6%8C%81ssh))
 
 ## Credits / 致谢
 
