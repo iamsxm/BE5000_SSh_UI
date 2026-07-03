@@ -24,6 +24,30 @@ A tool designed to exploit vulnerabilities in Mi Router BE5000 with 1.0.53 firmw
 - SSH 持久化机制(参考下方)
 ## Download / 下载
 [Releases](https://github.com/iamsxm/BE5000_SSh_UI/releases)
+
+## Build and Release / 构建与发布
+
+### Local build / 本地构建
+
+> Fyne 桌面应用需要 CGO 和本机 C 编译器。Windows 本地构建请先准备可用的 gcc 或使用 GitHub Actions 自动打包。
+
+```powershell
+go test -tags ci ./...
+go install fyne.io/fyne/v2/cmd/fyne@v2.5.2
+fyne package -os windows -icon xiaomi_icon.png -name BE5000_SSh
+```
+
+### GitHub Actions release / 自动发布
+
+推送 `v*` 标签即可自动构建 Windows amd64 压缩包，并上传到 GitHub Release：
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+也可以在 GitHub Actions 页面手动运行 `build-release` workflow，并填写要发布的 tag。
+
 ## Usage / 使用方法
 
 1. 解压缩/build/bin下面所有文件，运行程序BE5000_SSh.exe

